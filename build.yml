@@ -1,0 +1,23 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: free60/libxenon:latest
+    env:
+      DEVKITXENON: /usr/local/xenon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: make
+      - name: Preparar xenon.elf
+        run: |
+          mkdir -p dist
+          cp fazenda360.elf32 dist/xenon.elf
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fazenda360-xenon-elf
+          path: dist/xenon.elf
