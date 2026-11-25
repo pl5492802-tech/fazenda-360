@@ -11,15 +11,15 @@
 typedef struct { int up, down, left, right, a, lb, rb, start; } pad_t;
 
 typedef struct {
-    int active, x, y, dx, dy, tool, water;
-    float cool;
+    int active, x, y, dx, dy, tool, water, moving, frame;
+    float cool, anim;
     pad_t prev;
 } player_t;
 
 typedef struct {
     unsigned char tile[MAP_H][MAP_W];
     unsigned char crop[MAP_H][MAP_W];
-    int gold, seeds, crops, day;
+    int gold, seeds, crops, wood, stone, day;
     float daytime;
     char msg[64];
     float msg_timer;
@@ -44,12 +44,81 @@ int  plat_screen_h(void);
 /* font.c (portavel): texto 5x7 desenhado com plat_rect */
 void font_draw(int x, int y, int scale, const char *s, int r, int g, int b);
 
+/* ===== sprites (extraidos da folha do personagem; 22x40, 60 cores) ===== */
+#define SPR_W 22
+#define SPR_H 40
+/* direcoes: 0 baixo, 1 cima, 2 esquerda, 3 direita; quadros: 0 parado, 1-3 andando */
+static const unsigned char PAL_BOY[60][3] = {
+    {9,10,18}, {174,67,52}, {44,88,174}, {14,42,97}, {229,136,95}, {159,114,48}, {65,29,18}, {135,56,29}, {180,47,47}, {73,35,25}, {249,190,145}, {88,30,20}, {7,24,60}, {248,179,131}, {59,40,41}, {157,43,41}, {28,17,15}, {54,18,14}, {225,162,122}, {26,24,39}, {25,64,135}, {51,27,29}, {243,161,113}, {37,27,20}, {22,57,122}, {18,49,111}, {247,246,240}, {5,14,37}, {76,25,17}, {44,39,49}, {215,107,75}, {109,41,24}, {105,23,26}, {68,50,56}, {121,49,26}, {82,41,38}, {45,14,10}, {243,224,206}, {244,202,168}, {53,73,115}, {138,80,63}, {31,72,147}, {198,54,52}, {121,58,57}, {134,30,32}, {45,52,90}, {149,67,34}, {89,68,70}, {35,11,7}, {116,104,92}, {27,40,74}, {64,19,15}, {177,142,118}, {10,33,80}, {99,36,22}, {178,107,79}, {203,81,59}, {24,9,6}, {86,44,23}, {37,80,161}
+};
+static const unsigned char PAL_GIRL[60][3] = {
+    {133,47,24}, {34,21,16}, {247,207,175}, {24,70,149}, {112,51,22}, {207,96,64}, {66,39,34}, {31,43,80}, {45,31,28}, {38,10,6}, {243,239,237}, {107,98,107}, {106,33,19}, {96,78,79}, {63,71,100}, {182,174,181}, {9,17,40}, {14,52,121}, {213,149,120}, {186,77,41}, {63,50,57}, {30,79,164}, {174,121,95}, {8,30,76}, {50,14,9}, {6,10,24}, {90,46,35}, {63,20,13}, {234,140,98}, {211,202,205}, {145,54,26}, {122,66,50}, {21,10,8}, {47,37,47}, {136,134,154}, {93,41,20}, {123,116,129}, {231,223,220}, {8,22,58}, {248,178,130}, {169,69,33}, {19,60,134}, {93,27,16}, {78,33,18}, {120,40,21}, {155,109,73}, {9,37,93}, {32,60,114}, {243,158,114}, {224,119,80}, {81,64,65}, {12,45,106}, {134,91,74}, {68,90,147}, {78,22,14}, {175,85,61}, {249,191,146}, {155,61,30}, {217,173,161}, {161,151,158}
+};
+static const char *SPR[2][4][4] = {
+  {
+    {
+      "......wwwwVm6wwmmm........wwmmm9VsaamBBa......w6mmmaaSBspaSVp6w.....maBVYYBSppBBVBmvvw....9HaHSsY7YYSBBVYYBvH...wHaSVYYYVV7Y77Bam69...6mSs77YVY77V77spa69..wmaBYkYssk7YSBkYSSv9..aasVkYBHBkYpapskYSaawwasB7VpH8VspaFFaBYYSm9wm6BVpVuuspp1u1kpVSpm9.aHSssWYVuuUUe7YsSHmaw..vppiN00UDAMGvG1ppv.....mmub00AAAA00b4smZ.....mW4Q00bDDb00QMim......HW4Aq0ADDcNMbMFa.......pB4MDDDDDDDMBS.........ZHuAADDAMUaa...........mvGF118vvv...........aW3o118833ia.........aFgO3uuuu33g8p.......ZS8gfOggg8ff8uS.......aigFKfrrrrff8uFH......HFgWPnOxxfndig8H......pggaP5f22fnOJggp......SgFNOK222xPPCF8S.....H8uFGOKf22fPPC1u1p....H4DuHrPPP3r3rJUD4pp...HcAcBPKfxffK3HAcApp...HAADGPffxxxxO0ADApp...peee0OK3rrPxKRZhe9.....aaaRffORR3ffCaHH........XRKffRRPffCE..........XRPxP003fO0E..........EvVksvvB7YvE..........EvBVVvvBBwvN.........Lvsk7VvvBkksmL........NvB7YwvvSY7svG.........LvwBvNGm6wvN...........NGGv..vvGv......",
+      "......................................................................................................................wmmawwmw.............6mBVaHaHm...........9aamHsVaSBmw.........9HBsVsSBSBSmm6........waassVVBBVsVsmw.......wmBVYVYYssYBa69.......mSs7BBY7ss7YSv9......9HsY7SH7YBSVYsmm......mBYYBpFVYFFHSsSm......mHspWguBuuuFaSpa.......mmspv1MDu0HYaH.........mFc0ZAAq0I1m..........HUQ0lcAc0Q4S..........HtMnDDDDqD4S...........6sDADMDMea.............p74DMt7m..............6oE11VJLH............6i3luu13FWp..........ai8OduuhKg8pZ.........H8iOPooOfi8iZ.........p8NjKx2xnT88.........aggJOf22fOR8uBZ.......aDMJOO2xOPJ4ASZ.......aAIC333333JMcpZ.......HIeCOxxxxKCLA.9.......XamCxfPPfxP0aX.........XTCxfrrf2PRX...........TRx23C22rJ............ERKKrRKKCT............E033R03d0T............EvwsHvVVmE............vsYYSm77svE...........vskkSvs7Bv............NvssvGvvvN.............NGGNNNNN.......",
+      "......................................................................................................................wmmwwww..............w6ssm9am9...........w6mmSsHmYs9..........9aBsVSSSsVmvmw........6mpBVYsssssSSv........9apsYYVVVVV6H6........mBs7YVVYBYVBm9.......HmB7YpskYHpYsHaw......mBYsapBVS1VSsSaw......mSVpY1upuuuSBpm9......9maVaGU44ZGSsmaZ......ZHm7l04DDL01VvZ........ZaUb0cccT0buH..........p4cGDAAneAtp...........HMDDMDADhH.............HuMMDUka..............G0iFFGG9.............airuugX3iH...........HggKFg8jP8pH..........pgFf3ooKKFFa..........S895K22llW8a.........pg8JK222fPL4e9........aDMJK222KPeDtL........HDDR333PPPlMZLX.......LIlrOfxxxPR76X.........LGOx3r3fKRJX..........X0K2frCPPRX............Jr2xC3OrRT............TCxKR3PCJ.............EGY90RrRJ.............LvYYaGsaT.............GSYwaHsSv.............NawBvB7Bv..............vppvG6vN..............NvvNNGG........",
+      "......................................................................................................................wvmww9w..............w6sBHpmv6...........96ampsppsBaw.........9HsVVS6SBSmvmw........6aSVVVBBBBBsSm........9aSVYYVsVVsBa9........aSs7VsYsV7kVa9.......6aBkYSB7VpBk7Sv9......mpVBaHBVSgppBsaH......vaSaV8uVuU1BHSm9......9ma7avuMMtvHBmL.........a1qvtDAXGtFv..........pUQ0qAcl0QUa..........6MblADAAqc46...........6MDAMDAD1H.............ae4AAusH..............aJVFFNvS.............HFPeUuXoFa...........H8gKhggjjgWa..........p8FfjooKd88m..........W8EndxfdXigH.........Hu8JOx22Or9gFH.......XHDMCOx22O3LDAH.......XaAtC3333PrJAAH.......XND03OfxxxPRDAH........XH0PfO3PxfRaHX.........T0K2f3rOKRTX...........0OxxrrKO0T............TrKKRCO3RT............T0wVGR3CRE............Gp6Sm6YwGE............Gmp6mBVsmL.............vppmwk7HN.............Nvvvasav................NNvvvN.......",
+    },
+    {
+      "......HH6S6m6vmmw...........6maBBmvsVpw........w9vm6pBssSsBvaaw......mHBsVsSBsBBBssHmw.....6HapssssBV7VVpHa9.....9maSsVssYY77Ypm9......mmBsVYVY7V777Baa9....9mpSVk7V777V77sSm6....mSSs777V77777YBVBm9..9aYSS7YVV77s7YsBSmv9...6SaSsVVVYYBVsSSHm6.....mHpSBBSVsBsSSpm6......maHHBSpBSBSSpHvH.......HmapSpppBHHav9.........9mHHHHpHHav9..........ZZammmammm9............ZGvmmamvNZ............aCCuuuuoJaZ.........ZHio388FFrjFa........Z9pgdO88giOdgWZ.......9ai8dKo33oxjg8aZ......9a88jddxxxxj8gaZ......9Hgijj22xxPoigH6......6HgWjKxddxPoWgH9......9W8WPfxxdxPoWgSZ.....HBu4HC33333rJp44pH....phDAGCr333PrTpcApa....HhDMJPf2xx2K3JDApa....LEee0PKxKKxK3Ret9......Xam0PKOCC3KPRmaX........XRPKPCR3KPRX...........ROfKrR3fPR............RrKOC0PO3R............0CjjR033oJ............0B7YavVkwv...........NvsYsHmsVsmN..........GSVYVHmY7V6v..........NvB7YmvVYsmG...........NG66GGH6GN.............GGGNNGGG.......",
+      ".......................................................................................................................w....................wvwwmw...............wmsamsmH............wmvaSBBsmavw.........9apSSSBsBBSpm6........9mpssBSBVVsSa6........96HBYVsBVYsaH9........9mBV77VY77YBv6.......HaBBYkYY777VsBm6......HaBBY7Y7777VsBmS.......9mSYYVY7VYspvH6.......6mHsBVYYBVSav66........6apSBsBBSpHH96........6mHpHSSppaa996.........6mHHHHHav6999.........96vvvmmv69999.........9aL9iiiaaZZZ9........ZHWjF8FFoZpZZZ........6igOhgg83gi9ZZ.......ZHg8OoFFTO88a..........pgidjooodWga..........WgWXd222lSgW.........H8gGKx222K088a........H4MGKffffKRM4a........HAIR3OffKKrMDH........HDLCOfx22x3lMHX.......XaGR3PPOPOPRHX..........TRrrCC3P3RX...........TRCrCRKfrR............TJCr0R3K0T............TvNHvvVwvT............Lv6SmaYYBG.............mHpm67YHG.............NvmvGwBv................GNGvvN.......",
+      "................................................................................................w6ww6w................6a66HH9.............9HasHHVmaH9..........9mHpaBsSmpv6..........vSsVBSSsssBmH.........6mBVVsBsYsm66.........vSsYVsVV7YBa6.......6amSs7YVYYkYBpm9......SaBSYkYY7Y7VVB66......6HaBY7VY7YYVppa6......66vHssVVYVVspm66......66HHSBBsBBBSpv66......669appSBSSSpm666......9996appSpppHa666......9999HaHppHam9999......9ZZ99Gmaamva9999......ZZZ9aNiiiiNG9ZZZ......ZZZSiP8g883hpZZZ........HigOjggh31WaZZ........Hg8fPTojdh8mZZ........BgVXdfxdligHZ........LF8pOx222KJgF6........aguJf222xKRuUH........pAIJOfxKOOCcDLl......lHAtRPffKKOoDDHX.......X6arKx222fCHHXX........ETrKOP3PfRLT...........TCP3rCOfRT............TR33CCffCT............GNCCRCffCT............NN6HvR3PRT.............GHHvmVYGT.............LvvvSYYHN................vwY7aN................GGSmm..................vGGN.......",
+      "...................................................................................................www................waH9pmw.............wmmBHasaHw...........wvHSpSVBmmvH..........mssVBBSBSBBaH.........9mBYYBBsVBmmw.........mSsVVssYYVSm9.......96vpV7VVY77YSma.......6mpSs7V7kYkVBBa9......6aHSYYV77YYYSam9......66mpVVsVYVYspv6.......66apSsBsVsBSpm........666HpBSSBSSHa9........669aHpppSpHav.........9999HaHHHHHm9.........99999vvmmmv9..........9999maiiiiLaZ.........ZZZHiP8g883iaZ........ZZHigPX88Z38ia........Z.p8gdjZETO88a..........p8ildjjOKigH..........W8WOx222PTgFZ........H7gGKx222KGggH.......lHtDROf222KJAIH.......XHtMRrOKKKOCDIH........XELCfx2xxKCZEX.........XLrfKPPPOCLE...........XCffPRrPRX............TR3xKRrCRT.............JrOORCRT..............JREV0GGN..............JHVYHvvN..............GHs7wvN................v6w9v.................Nvpmv..................GGN..........",
+    },
+    {
+      "......wmBaaBvwwmm..........9mvpHsVBaHBvw.......w6pHppSBsBSssm66w....waHSSV7VVBSVYSaamHw...waaBVV7Vsss7VBYsBmH...w6HVY7YVV7YYYVBHma9...HHSY77VsY7YYYYBpm69...aHS7kYBV7VY7VVYBma6..wSSV7sSHssS7sVBYYpaH..6asYsHpFBap7BBVsVBHH..HaSSSFuu1FVsBpsBSpaa...Z6aaUY0GV1SpaHSSHma.....9m4I0nIUpSuHSpm69.....ZmDQ0qb4SeDpSpv6......SAAQ0qbD4DDHHm9.......9sDDAADDM7ppv9.........6tAAADU1Waa6...........ZqqIU1Wvm6.............Ha7FhGGp..............Xa81O88S9.............NWgOOg8iHZ...........XGijK1gg8aZ...........XRPOfhFg8m............XR2d53Vu8S9...........XRfxfPGggW9..........X6JfxxPGu8WH.........EHt0PKKTtD4VH.........THc03PPLcAAkH.........TLq0KxxJAD4.H..........TG0PKfxGHHa............TRC3KxOrJE............TR3rfxK3RE............T0PRfKPr0E............T0o03OrC0E............EmVm9V96mG...........Naswv6wVwpv...........GvBHkkYVwpv...........Gvma7kVB6mv............NvvpHHamG...............GGGGGN........",
+      "...............................wm9.................w9Hpaww6w............w6vHsH6Hmm..........wavHssYSpsSm66........H6ssVSsssBBSpaH.......HpBVVsVVBsVVsSv.......pBV7Vs7YsYYBHm6......mpBYY77kYY7VsSm6......mBVYBkkVYkYYYBHv......aVVBS7BSsYYssVpm......9HppsVu1pssBSSSa.......6amusapkBSBSpHa........ZmUwv1uHpSBpHm........ZvAnGb4aUpppm9........pIcnGQAMApHavZ........p9ADDDAUBppm...........StDMD41HaH9............Zeet19vv9..............mmiFPNH................puddWSp..............HFtKgg8p9............LJFOdgg8Wa............LoPPdFg8ia...........LSlf5PEFgga..........9u1oKxKrBggFH........H1McJKxKrRUDAH........ptAtC3OPrJMAAp........EZtTRr33oYAcAH.........XpGRPf23LYcUH..........XXRC22PC0maX..........XTR22OCRRTE...........E0f2f3RCRRE...........E0KOPrCrCJvE.........ENNoO3CCrN6HG........EN6Y79J00aBSHv........GHkkYVSvvSBpvN........NNV7YSHvv6Hmv..........LvapHvNNvvG.............NGGv...........",
+      ".........9H..................wwHm6w66w............wmmSsvHav6...........vvSBsVBaVHm9w........HSSSVBVVsssS6a9......9ppBsVsVYVsVsBH9......6HHs7ssVYYYsSaH6......HaB77s777s7VBpm6......HaV7skYsYkY7VBpa......HmVpVspps7ssVsSa......HaSpBYFVSYsssSam......w6mm1apBYVBBSpHm........6vU0vuupBSSpam.......ZZmc0Jc4mUHSSa9........pAb0JQDDDHHHH.........ShADDAAUpama...........pIDDAUYpmm.............Yq44FBvm...............aaFFjJp...............9BuOd8WS.............EH1jOggFS9............LJ8OOgg8WH............NoOOKF88ip...........Eaff5OTWg8W...........p1rfffPJggiH.........p4cCfxf30gMFa.........pDIRPP3rSDD4H.........HII0r33r7AD4H.........XpHROxxPLAMtL...........XRCOxfraaaX...........TRK2x3rRLE............JCf2f3RRTE............R3fxPCCC0L............RrOf30CCGvL...........G6VoC006pmG..........LvwwYBv9SpaG.........LvYkksSvwBmv..........NGV7VsHvavvN............GaaavGvv...............GGvv..........",
+      ".....................................................wa..................w96aHw96w...........wwHvBBmaBm9..........9mmpSVVSpVpm9w.......6mSBBBSVVVsSpmmw......9a6BsBBYVVsssSm6......99SVYsYYVVVspm69......aHBVY77kVY7sSHa9......apVVs77V77V7YSmH......aSVSBVpBVYYsYsaH......mpSpSFupsVVBBBaH......9ama8BSB7BSSBpaH.......9Gm4GvUuSspppma.......Z96AT0cUpUmHa6.........HDcT0bDDAmam6.........p7DDDDA4ppaHZ..........6DDDDUiaaH..............ZYFiWGL..............HmaFFjLH...............pp8jh8Bp..............68Odgg8SZ............JJFKlgggiH............Jr3KdFggFH............LPf5OjW88SB..........XpofxfPJiuFa.........XpIRKffPrGADH.........XHM03333rtcDH.........XaI0POfKoecDp..........XL03fxKrRI49...........XRf2KPrRaaE...........0f22PrRr0EE..........EGKfOrRCCCvE.........EvBwo3C0CJ96vE........m77YVL0006S6vL........vYkVVSGNm6wpvL........GvBV6mNGBsSvL..........NvHHvNNvvvN............NGvG..GNN......",
+    },
+    {
+      "......www9mp6H6www.........pm66aBsmSamm9........wmYBaBsYHmp7Ymw......99vpYBsVV7Y7Vamw.....6mmBSBBV77VsVsBBa6....aBBssssYY7YsVVBsBm9...mmBsYsVYVsk7VkYBaaw...9maSV7YB77k7YVkVm9w...6aSVkssVk7VsVHsYBm6..6vSB7VSB7YBaBm8Hssm9..6mSBVBSSYsSi11gaSSpw..9mSSspppBBW7khUvmm....9HppBHHaHkUmvGMvm......6mHpHUuauMb0QAvh.......6vaBDMUDAQ0QAD6.......ZHmSkt4DDDIcAtp........ZaHHY4MDDAAD9..........ZmmHF4DDDDa.............6mLF8ama..............apjO1ia..............HSFgjOgH..............pFguhOhFR............HS8gFXfP3R............aW8gWj5xxRT...........aWggLOxxx0X...........HWguJOfxfRpX..........HF4493POORYEX.........HMDAUL3330DpE.........HUDDALKxfRIp6..........aaHaOxKORLE...........XGJoOx3CRLE............R3PxfC3RT............ER3PxfCP0T............E0CrPOR30T............Lv6s7kmVvL...........Em6SVkBvSsNL..........Em6BYYkk6svN...........Gm6sYk7HavN............vaHH6SvvG..............NGGGGG........",
+      "..........9ww.................wwm9wawmw............wmmVsmamaaw.........wmpSssYSBVVm9.........aHSssYsBVsam6........waBssV7sssVsBHa......9mBssY7V7ss77Sm6......9mSB77Vk7kVB7Vm6......mpBYVVY1VsSHSY6v......mSVYVVYYppuiaBpm......mSVVSBspSuUUaHH9......mHBSppB77m04Gm.Z......mappHaHUcn0Dv..Z......9vHpUtpMQnGcv9.........mapIDMDbqGccp.........ZmHSkMDDDAAtp...........mmpF4DDD4H............ZwvHF1aaa..............NTjhFm...............HWFgKhS9.............HpFggdPF0.............HSggFdPr0.............pWggWj5f0.............SigFpOdfR9...........HSggiJKxKRhX..........HSDDtJOfKRDHX.........HSDAASrrr0MaX.........HpDAA6fK30eLX..........9HpLOxOrRH............XHGoOx2RRX............XJRrPx2PRT............ERRCrOxxCJ............JRrrCPKPo0E..........EGRrrRr3Y7vvE.........LvS9C00sVVk7v.........vBsBGG0BY776v........LvBsV6GGHsYHvN.........GaBYBvGG6vvN...........vm66vNGvN..............vvGG............",
+      "......................................................mw6w................wwv6a666w...........wHamspmHSSmw.........9v6SsYBssYpm9........9mSssYVBBsBvp6.......9HmSsVYVBBssssmw......9mSsB7YVYVY7YaH9......paSB7VY77kYS7Sm9......mSB7skkYVBpHSBv9......mSsVB77Vps1smSv9......vpBsSsBS71Uumm99......vaSSpBS1p094m..Z......vaSpSpHuc0lIm..........mpp4VsMQ0nba..........6mHIMMAbnAcw6..........map4MDDDDMw............amV1UDDD9..............mmYFVmm..............LaZjjia...............piggPhZ..............HBgg8KjVG.............HBggiOOPG.............SiuFLPdOG............6p8uLCPK3BS...........9p4A9JOf3tWp..........LS4AAL3OrtAH...........BMAAL3PCeUH...........ZphEl1jJGpX...........XLaTl1l0GX.............E0rX1hCRE.............0RRoFef3T............L0CCCjdKP0...........EvHJCRrOjEaG..........vaS9G0RowY76G.........vaSBmmmSV7kVv..........GmS6vGpVYBaN...........mmmNGmpHvN.............vG..vvG........",
+      ".....................................................6aHwm6ww............w9msBmmmmHw..........wamaVVmaVVHH.........wmBVVVBVVBam9........9mSVVs7sSSVBBa6......w6HSssYYYsBYYsHa......9mHBsVYY77V77Yaw......6aHB7YskYkspVYSv......aaBYYVYkBSpkaSVv......aaSVSsYYSY11HHpm......amSSpSVSFieUamm.......amppaHp11v04vH........9mHH7uvUcn0cvL.........maH7DeMbq0bIp..........aaSkMAADIAAp..........6HppUDDDDD6.............amB1uehh..............6pEh8Ha..............ZpFFd1B...............a8ggXOip.............HWgg8gKjRE...........9pFgFWXnOCHZ..........pWggHCO5fC8pp.........HUMGC3fxKCUDep........HDcGrPxxORIAtp........HAAZr333rR44hH........6AM03O2x3RGHE.........Xp6ROf2fCCXX............XRrPx2CRX.............ERR3O2fRX............E0CCRP2fCT............NvJC03OPCT...........Lmp600r3hNaE..........NmSSHvNVYsaLE..........NvSHvpY7k7vN..........NmmvvaskYsvL............vGNGpS6vL................NGGGL.......",
+    },
+  },
+  {
+    {
+      "...RsRh4Z9999R.RRssZs...OJJUgORCCZZRsOUJJvO..9eveW9gCi0viCCRWiU5U99UeeWRgi0viiUvvgsROUJ99UUi9gi0eU0vvvvUgOOiU9900ROi0ev0eee0vvCROC099iiOgiJeviJJ0s0JisOs099CiOiee0CseesvOUJigRiOh9iOivUsgisRvJJgUigsRhhRi9CCssJ5ig5nnUgsRgRh90C9ggRR05nSnnvCCROgis9Ug9R00WWVuumWWWeROgiR9ggRWvIxPquuuPWb5sOgsO.9gsOnuFWqud2PWAmgRsOR.6RhRvddqddduIq2SssgO...OQRC5dddddddudeZRgO...O...ReSdddummCW..R9...6...89WvJJvO99...........X.7Nt55n7NB8..........DaEkImSmkNFBo........XxAYfbAAbpkAFKX.......oTTrffErrfHFbBo......6aAFrDkkpHq7xAYD......8FbYl73LLLlkEbTo......hnSjkpfLLLHp8nnCQ....RSuStNpHLL3HH8SdS6R...RmuutNHHpkpppOmuuRR...Ruuu8pfLL3LfH1uu2RR...RuudGpfLLLL3HXjuu6R....OOONfffkkp3LN1OO........oGf33NPpLLNco.........KGH3fcPp33NX..........KP7llPP7llP6..........6W440OWh44W8..........WOhZZOWhZhh16........8WZevZ9WR0eZ91.........WO4ZZWWRZZh18..........19OW18199W8...........8111..8188....................hh......",
+      "............................................................................................................................................OO99O...............OORCggs99s...........9sCiiiUiggRR.........OgCi0Ci0U0CCh.........OiiUUii00UiCO........hRCUviiU0Cee0OZ.......OsiU0geUCRveUg9Z......Oiv0gR00iJsiUi9Q......OCigsJsv55ggCg9Q......OggsRtnSSt0sss9.......ORR0WPmdmWWesRR........OCtxPuuuWaSgR.........OnSFW2uAWMutO.........RRtmddduudiR...........RRUduduS0O..............11J5U1W6............KKEknnnNEo............oBak2dmNEbX..........8BTYpraapabKo.........XFT7qp3HD7bT8..........Iw7o3LLENIIh.D......R4mScHLL3pcnmS6D......R.2ScppkkkGmuuR.......R.dQN3LLLLNGudR........RRPH3LLLL3POO..........RP33pkH33PKK..........KPfLHGfLfPK............GN3fPH3NG.............KPpNPNlGK.............6RZhWZ4R8............6WC4ZWZU4W6...........8W4vZWh4ZW8............19ZR1WWW8..............111............",
+      ".............................................................................................................................................OOOR................OOssgsO9R...........ZOCCCCiCCiOZ.........hRgiigCivUC0OZ........hOg0Ui0UUUig9Z........hg0e00ev0e0C9ZZ......ZOC0egvJigveCs9Z......QOivisi0CUsUUgOZ......hOiis5sR5JCCig9Z.......OgsR5nnS5UsCR9Q.......Oss9WSumPWURRhQ.......OOJFPuuuPBnRR.........ORdbPbu2WBuvO..........ORmddduud0O............OgnddumCO..............RWvee19..............XKNtn5c7K.............KBkSSSkEoo...........XYAkYTFprTXDDD.......D8TBDNppjEbXDDD......DD6wKofLLE7wQDDD......D1nSVpLLLpGSSRDD.......OdutkpppkGuuRDD.......RddPf3333GxuRoD.......KhRcfff33p1s6..........KXc3pNkfp16............Xc3pGH3kG.............XG3HGf3PX..............GpkPNHPX..............WZZWhZWX.............894RWZ0h1.............1O4hWR411..............1RRWWWW...............8WW1...........",
+      "..........................................................................................................................................hO.O9OOhh............ZRiRRi0iRO9..........ZRgCiCgCiiCsR.........Z9siUiCC000i9.........ZOivevCe0evi9.........Og0evgevsUJvi9........OC00is00CCUei9........9CiggesCJCgUi9........9gCOv555S5ssi9........9sRgWWSdSWW0sW.........OvMEPuuuPbt9..........O5bDP2u2PAm9..........6RmmIduuImeO...........RgSdumuSVs.............RCmudSRR...............XXe5CPo.............KYkkSSnkF6...........oBAlpAbbkAaK..........oTbplkNkpYbK.........D.Fx7jf3fjkb1.........6vm5NHLL3HcmSR........6tu5Np33fHGmuR........RMdJNppHHpGuuR........R.jPp3LLLLcsjR.........ROPfff3ffp1R...........KG33pPpHkK............KPHLfPpfPX.............XkffPkpPK.............1R0hW16WX.............1h4ZWhh98............8W4v49hh98.............W9ZZWWW1..............8W99W88................8118..........",
+    },
+    {
+      ".....O9Z.......OOO........O99OZR99RZOOROR......ROUeRWRggsOsJJe9R....RZUeR9gg0iih9gvJisO..ZOeU0OC00ii0CsOs0vCO..ZOU0sC00UU000CsOCUCO..Z9CgRC0UUvU0vigOsig9..Z9gsR00eUJU0J0iRRgs9...ZORg0e0eJeeJeiRRs9h...h99C0JUeJeU0eCRRs9....hRsCUvveeeUvvCssOh...QhCCgUUvveU0vUCssOh...RgiCRCv0UeU0viisgi9...RsCsRg0Cie0C0CsRRO9....699RgiiiUCCisRO9h.......OOsgCCCCCgsRR6.........ORsggCCgsR96...........9RsgigsOW.............KWOsss9WKo...........8Bk7RROXka8..........KKANkw9oMkbBX.........XFANHp7kkNbFXK........XTTNEHff3HFTKo........KAxNDLLLLlxboK.......8.TYNfLLLLkBwIR......RtSdJNHLL33p6mmmO.....sM2uecpkpppkgduuO.....RMumXkfHfffHGIuuO.....RqddGHLLLLL3c6uuO......OO9Gf33HfLHHPOO.........KcHHkGkkfpX...........KGH3HPkHfPG...........KGpfpPNpHPX...........6GN7NPG77PX...........6W4vhWhV0O6...........1OZ4hWZ4CZW6.........8WZ0vZWCvvhW8..........8940hWh44O18...........199W1WWWW8............888888118.......",
+      ".............................................................................................................................................9..OO................RRRRRhRh...........Z9ROCCCshROZ..........90iRgCiCRUU9Z........RC0siCiiiCsU09........O4RgUi00iiRgi9Z.......9ssCv0UU00CRs9h.......hOs0eUee0viRRhh.......Z9gUeeeeUUiR9hh.......hOi0e0vv00CO9hh......QRigCU0evi0CRg9h......hRCRC00UUi0gRR6Q.......69RCi0U0iCR9966.........9giCiCCsO9666..........OssCgss9..............O9ssssO6.............8X8RRR9WoXooo........K8Fk8RO1Gx8ooo........8FApl8XpNTY8DD........KbF3pkkHHYAXDD........DA73LLLLHEFoDD.......OnIGHLLL3pXS56D.......RddGk333pphddOD.......OuuGkpppHpcuuOD.......RMVPHLLLL3cqj6o........ROPfHHHffc88...........KPpkcNpHGK............KGppGp3fPX............XGkpPNfpPX............X1RhWOQhWX............8WZZWRZZW8.............WhhWZU4O1.............8W9WOgRW...............118WWW1.......",
+      "...........................................................................................................................................ZZ9RZR9h.............ZO9sCROhsOZ...........9ggsgCgR4CO..........ZRgiC0iCgg0RR.......ZhRgs00000isCC9Z......hhOsCUiUvUUCOg9h......hhOR0e0vvUUCOsOh......hhRR0evveUUCO9Zh......hh9siv0UeU0iOOhh......QhRgiU0Uv0iggOhh......6RRRCUiUeiigsO66......6699siii0igs9666.........WsCCiigsO966Q..........OsgCCsR96.............XOsssRR9..........ooo8aP9RsR1DXoo.......DDXaTcosR8GbBKoo......DDKbFkp71lpTFXoo......DDXABffkpf3ab8oo......o6VIDH3LLLHDwqKD......DRSmRHLLL3pKSnRD......DR2uRHHHpkkQ2uRD.......6VVPHLLLLHGuuOo........ROcfL3fL3NOOK..........KcHHpppHc8X...........XGppNNHHcK.............GNHNk33GX.............GcNPkffcX.............WshW1QQP..............1OhWOZZWX..............WWWZ4Z98...............8WZ4498................W9Z9W..................1W1........",
+      "..............................................................................................................................................O..9.................RROORhO.............ROOggORgOZ...........Ogggs0gssU9Z.........hRsC0i0iisgC9Z.......Z9gsC00vi0isC9Z.......hOggUv0eUv0ss9Z.......hh9gvvve0e0g9h........hh9giv0eUUUg9h........hh9CCvieUUisOh........h9Csi0iU00isg9........6ORsi0iUiiCRRh........6.OOgCgiggs96............9RggiggR9.............69RsCsR96.............K8ORgsO16............KxYGOROGBK..........ooKxT7Q9XcTa8.........ooBTxlBBacFT8.........ooBT7fkpklabX.........D8Sn8H3L3kVmnR........D8uS1pf3fktdmR........o1utGppkpp7udR........o6R1N3LLLHG6.6.........KXGk3fHfHG8K...........KGN3fGkpPK.............GPp3NNNPK.............XPN3pPGGX..............Pc78W98...............W844991...............8W449W................8W4Z98.................1RR9..................8111.........",
+    },
+    {
+      "...............OOR..........O999OhZZO99s......Z99OgC00COh9UJJU9R...ZZgsCiiCe0iCO9UUJUsh..hgCC0iiivvUisOO0vvRR..hOCiU00UUUU0gs9R0eR9.ZROieUi0J00UvCg99C0R9.ORCeegC0eeiUeCCh9CUs9.Os0vCsssCev00eiCRCCO9.Og0Cs0eCs0eUiviCOgCO9.9RiggJ55CiUiCiiCOgiR9.9RgR5tO9siiCgCigOgUCRh.OO9vS1WMesRsCisOg0iC9..V6qb8Wbnsvdsss9ggii9...guAXWAddmSRR99g0CRO...guuuu2ddngsRORgisRh...RVuuuddngssOOOsCO9.....Rduuu5ZOO9..ORgR6......ROO5eV81....9sh.......D8enwYBK6...O96.......D8I2kFAFX.............8XbH3bAFoX............8BY33FATaX............DxfapYbbaK...........XKLLok7FAaK...........6Xf33pkMm5...........KRGk33pc5mmR6.........KRGkHfpQuumRQ.........6RGkLLXVuumRh.........K6cHLLp8ju566..........KcNf33k1OO.............GNc3LfpPK.............Pkc3LfpP6.............1cNcfHcP6.............1hZRUZhW1............8RZRWZ4ZhW6...........WsZRv44ZsW8...........19WCv04hOW.............WW9RRRO98...............81111..........",
+      "...................................999..............hRs4hORRh...........ZZ99Os9iJvi94........OORiiiCs94vJiO.......RsC0Ci0CCsOi0UO.......OgCU0ivUigsgi09......hRCiUiiUeeigssC9......9CUeiUUJeiU0sRs9......90UUCJeUeUeigs9h......9iisgev0veUUCg9h......9CssUvvi0UiiCgOZ......9ssi5iUii0CiggRh.......OOO5WWVegOiCsRO........O92W8mnRSRgsRW........hdA18AumSRsR9.........gdudduuStRRO..........h.ddduu5RROO...........hqudmJOOOX8............R9OJJK1.................6nTYEX...............8wxHAAoK.............X1bHHAAaK.............XEHfHTAxK.............XF3jkaAbK............8qp3ffcTTK...........R.mG3fp8mS8O..........RS2Gff7VumsR..........RuwGpH6u2dsO...........R1GfL62unhO...........KXckLL8sR6............KXk3LHNGGK............Kc3LfkPNPP............1H33HccN8W6..........8Rh7HkPN8hRW6........68Z44QG1WhZhW8........W4e04hOWRhZW8.........9RZ4Zh9W9OW1...........W1RRW981W1.............81111...........",
+      "........................................................hhh..............ZZ..Z999R............ZOO999ZvvWZ..........hOs0iiRW0UJRh........OggCg0UCsR0evRZ.......OgCCg0UCgss0U9Z......hRii0i0UUigsRiWh......OCUvC0JJie0sRg9h......OUU0seveU0vCsOOh......90isv0iUeUUisRRZ......9ss0UJ0ive0isss9......ORRvCe0i0UiCRRR9......Q6W5WWUegsigROWh.......Q9dxWw5Rnsgs9OQ.......sSuYWAdddssORR........RtddIuumqRRRR..........OMduudURROO6............IIm5OW9OR.............O9eeDX886..............95xYKX...............8FFkAbaK..............GbHpAABX.............XapHpTAFK.............WYfjlaATK............RtN33HkTT............RRdcf3pGnmnR..........R.dckkk6uudR...........oMcpHHU2umR...........KRGHL3cSdSO...........KXGL33kP9OK...........KPfL3kcNGXK...........XPLLpccpkP6..........8W8pfkPNpXRW6........W1Z448cP1hZZO8........9Uv4ZhW88Z4Z98........18ZZhOW8WvZO1..........81OOW881WW98...........8111...11........",
+      "...............................................................................RR...............OORZRORR............RRgCsO9CUgO..........hOgC0CRsCee0RZ.......hOgggU0CgOiJvC9.......OCC0iCv0igRgU09......OhC0Uiv0viCgOCg9......Ogi00UeJvUiCOgC9......OiUigveJ0UviROgO......O00iCvgv0vvvCOgO......9isCivJgUU0UCOCg......9ssUJ9ig0i00COgs.......O9vtWt5isgCgOR9........1t2WwngtissOR9........huAWbdSmeR99R6........hudddumSgR9sO.........QRddudtsROsR9..........RMISJCW9OsRO...........ROitBX86OR.............KqIaEKoQ.............D82lAbaKo.............8XFfAATKo.............KrffFAAaK.............KrBHHxbT66...........hQk33k7xwt...........8.dNf3pcvudVR.........8.dckHpNdudVR..........6WNHLHNVuSh6..........KPHL3HNc1O6...........KNLLfkcNP16..........KGHLfkGckc996........6W1lfHGPcNQZR9.......8Ov04KNP8W1ZZR9.......99Vv44O18WRZR16.......61h44RW18WORW8.........891hOW...WW8............111.............",
+    },
+    {
+      "................RR.........OOORZZ9O..R99O......4OUeeO9h9ORRR0JJ9R....RCeeZ9RsCUUigsivv9h..RsUevssgC00v0iggveCR.ZOC0v0OgCUveeUiiCCJiO.ZOC0i9sC0UeJeiviCg009.ZOC0gOg0ieeUUeiCsRgU9.hOgiCRi0eUUeUisRgCR0O.hORCCsivUi0eigeJ5eRCO.hRs0Cs0U0ii0gC5nneOOO.hO0igs0CCiiiUeWWn5O9.h90UissiCgCssJwW12t9..9iU0gsOgsUnRRmAW12M9..ORCCggRss0SmSdAW12uR..hOsgggsRss0Smddduunh...R9RgggORRRvSddddd.....69RssOO999CJSdddh1.....69RR968Wax5J99OO.......OORoKKxYYwmj1D.........66oKxAAFpwToK...........8obAAxHrbEX...........6YbAFrLlkrx1..........6bATBljLLrY1..........6TbF7H3LL3k1.........RsImj7HfLLfNRR........RUdmVXkpH3pNnR........sjuuuskpppkcuR........Rtmuu83LLLHGMR.........6OOOHLLffHG9K..........RPNHLLHkkGK............GkHLLNNkP............KPkH3fGNPX............6WcNpkP7WX...........6WWh40UW4WW...........6WhZ44sW4Z91..........6WhZ40vURZ91...........9RhZ4vUWO98............W9OORRWW8..............111111.......",
+      "....................................................999R.999...........h9sRssR9iJe9.........Z9RC00v0ggsevOZ......ZRgCi0eeU00s0esO......Z9gi0eevvvUCCvi9......OsC0eevUvevigiC9......9giUeUvJeUiRsgi9......9g0e0veJ0sRegsC9......9gieiUv0CJJ5gRRh......OCiiCi0CvJtSQORQ......sCiissi05OWm6OQQ......CsigJUgnuBWb86QQ......CRsgnm5mbBWb2R........ssRgg5mdddu2us........RgsssstSdduuV.........OsgOOsinduudO.........RssO9VtJJ1OO...........9RKoYYI58..............6KFATH2BX.............oKbAAfrTX.............KaAbxfHkN.............XTbxED33L.............XTbElELLc6...........R6nSK7fLfGQ...........RVdm6Xf3HGdR..........RVuu2RpppPdO..........OVmuu833fPh8...........RORRfLpNP1K...........68GkfL3cPK.............XGkp3LpGK............KGGcNHLLPX...........61WcPcf33PX...........1RhhGGk74s16..........9hZh9OZ44ZO1..........8OZh99h4vtvW8..........19RWWh400hW............1W11WRRRW6...............81111........",
+      ".........................................................99s.............h9OOR9veOR..........Z99CvUiRUvvOh........Z9gCivU0igCvUOZ......4OggUeJJvvisUURR......ZOgiUvJUvJ0si0OR......9sCiee0vvviRs0OR......9si0vvvvUigiRgOR......9sivU0JUissJ9sOh......9sgUiCegi5nn9OQQ......WsCigg0i5W1m9V........WRgCsJRn2W829V........9RgggnRmA18bO6.........RsssnSd2MM2mO..........9RRCSdduudC............9ROCndddV6.............1O5JJW96..............8aYwe1...............KBbbYIXD..............XFAApbD8..............XTAFHfHG..............XbAYEBLc..............aAbElLLG.............RawI7fL31h............O5SmWf3H8IR...........OSuuVXkN8dR...........RSuutXfkPqR...........6QVV8ffcP8............KOR873fGG..............KGkH33PX..............XPGkHLNG.............6WccGHHkP............89Rh1GN48O6...........8Whh9WZ4ZR96..........89hh9WZ4ee49...........8WhRWg444ZW............8WW19ssR98...............11111........",
+      "....................................................9OOs.99R............ORRRsZO0eZO.........ZOORCvv0gievOR........h9gi0Uee0ssveO.......OOhi0Uev0eUCsvC9......hOsiUeUUee0sg0g9......9RC0eeUee0gssis9......9gCUJUeeeis09CRO......9gCvvCevCC5J99RQ......OsCiiC00vsvS99........ORsCsss0JgW2W.........OORgsJs0SaP29Q........Q9Rgs55SdaW2MR.........89RsemddduuuR...........OssvSdddIO............h99ie5RRh..............6WqwJOD...............ooYFTXD..............KXTbTFo8..............KaAAYfFP..............XxATr3fG..............XAbxEELc..............YbbEll3NK............6xbx7p33XC............RmmMNH33KuR...........Od2dXpppK2R...........Rudd8pLfXmO...........6qjK7f3pPRK...........KOR7H3kNGK............KKGkH3LcG.............KGGcp3LPK.............8WGGHfHPK............81hRPc77WX............8OhO9h4ZW6............81h9R44U4W6............1WWOg4U4W6.............889WWWW8................11888.........",
+    },
+  },
+};
+
 /* ===== game.c ===== */
 #include <stdio.h>
 #include <string.h>
 
-enum { T_GRASS, T_SOIL, T_WET, T_WATER, T_PATH, T_HOUSE, T_SHOP, T_BOX, T_TREE };
-enum { TOOL_HOE, TOOL_CAN, TOOL_SEED, TOOL_HARVEST, TOOL_COUNT };
+enum { T_GRASS, T_SOIL, T_WET, T_WATER, T_PATH, T_HOUSE, T_SHOP, T_BOX, T_TREE, T_TREE2, T_ROCK };
+/* Inventario (barra lateral): 6 ferramentas + madeira + pedra */
+enum { TOOL_AXE, TOOL_HOE, TOOL_PICK, TOOL_CAN, TOOL_SEED, TOOL_HARVEST, TOOL_COUNT };
+enum { SLOT_WOOD = TOOL_COUNT, SLOT_STONE, SLOT_COUNT };
+#define WOOD_PRICE 3
+#define STONE_PRICE 5
 
 #define HUD_H 48
 #define WATER_MAX 15
@@ -60,23 +129,24 @@ enum { TOOL_HOE, TOOL_CAN, TOOL_SEED, TOOL_HARVEST, TOOL_COUNT };
 
 static const char *LAYOUT[MAP_H] = {
     "TTTTTTTTTTTTTTTTTTTT",
-    "T.HH..S..B.........T",
-    "T.pp..pppp.........T",
+    "T.HH..S..B..t..r...T",
+    "T.pp..pppp.r.......T",
     "T..p...........ww..T",
     "T..p...........ww..T",
     "T..pppppp..........T",
-    "T.......p..........T",
-    "T.......p......T...T",
-    "T.......pppp.......T",
-    "T..................T",
+    "T.......p.....r....T",
+    "T.......p......t...T",
+    "T.......pppp...r...T",
+    "T..t...............T",
     "TTTTTTTTTTTTTTTTTTTT",
 };
-static const char *TOOLS[TOOL_COUNT] = { "Enxada", "Regador", "Sementes", "Colher" };
+static const char *TOOLS[TOOL_COUNT] = { "Machado", "Enxada", "Picareta", "Regador", "Sementes", "Foice" };
 
 game_t G;
 static unsigned char dirty[MAP_H][MAP_W];
 static int tile_px, org_x, org_y, layout_ok;
 static char last_hud[3][96];
+static int last_side[10], side_ok, side_x;
 
 /* ------------------------------------------------------------ logica */
 
@@ -85,6 +155,7 @@ static void mark(int x, int y) {
 }
 static void mark_player(const player_t *p) {
     mark(p->x, p->y);
+    mark(p->x, p->y - 1);            /* sprite invade metade do tile de cima */
     mark(p->x + p->dx, p->y + p->dy);
 }
 static void say(const char *s, float secs) {
@@ -109,6 +180,8 @@ void game_init(void) {
         for (int x = 0; x < MAP_W; x++) {
             switch (LAYOUT[y][x]) {
                 case 'T': G.tile[y][x] = T_TREE;  break;
+                case 't': G.tile[y][x] = T_TREE2; break;
+                case 'r': G.tile[y][x] = T_ROCK;  break;
                 case 'H': G.tile[y][x] = T_HOUSE; break;
                 case 'S': G.tile[y][x] = T_SHOP;  break;
                 case 'B': G.tile[y][x] = T_BOX;   break;
@@ -118,11 +191,11 @@ void game_init(void) {
             }
         }
     G.gold = 50; G.seeds = 10; G.day = 1;
-    G.p[0] = (player_t){ .active = 1, .x = 4, .y = 5, .dy = 1, .water = WATER_MAX };
-    G.p[1] = (player_t){ .active = 0, .x = 5, .y = 5, .dy = 1, .water = WATER_MAX };
-    layout_ok = 0;
+    G.p[0] = (player_t){ .active = 1, .x = 4, .y = 5, .dy = 1, .tool = TOOL_HOE, .water = WATER_MAX };
+    G.p[1] = (player_t){ .active = 0, .x = 5, .y = 5, .dy = 1, .tool = TOOL_HOE, .water = WATER_MAX };
+    layout_ok = 0; side_ok = 0;
     memset(last_hud, 0, sizeof last_hud);
-    say("Bem-vindo! Compre sementes na barraca (A).", 6.0f);
+    say("Bem-vindo! Troque de ferramenta com LB e RB.", 6.0f);
 }
 
 void game_next_day(void) {
@@ -155,16 +228,37 @@ static void act(int i) {
         return;
     }
     if (t == T_BOX) {
-        if (G.crops > 0) {
-            char b[64]; snprintf(b, sizeof b, "Vendeu %d colheitas por %d de ouro!", G.crops, G.crops * CROP_PRICE);
-            G.gold += G.crops * CROP_PRICE; G.crops = 0; say(b, 4.0f);
+        int total = G.crops * CROP_PRICE + G.wood * WOOD_PRICE + G.stone * STONE_PRICE;
+        if (total > 0) {
+            char b[64]; snprintf(b, sizeof b, "Vendeu tudo por %d de ouro!", total);
+            G.gold += total; G.crops = 0; G.wood = 0; G.stone = 0; say(b, 4.0f);
             if (G.gold >= WIN_GOLD) say("A fazenda prosperou! Continue jogando.", 8.0f);
         } else say("Nada para vender.", 2.0f);
         return;
     }
     switch (P->tool) {
+    case TOOL_AXE:   /* arvores com 't' levam 3 golpes */
+        if (t == T_TREE2) {
+            if (++G.crop[fy][fx] >= 3) {
+                G.tile[fy][fx] = T_GRASS; G.crop[fy][fx] = 0; G.wood += 4;
+                say("+4 madeira", 2.0f);
+            }
+            mark(fx, fy);
+        }
+        break;
     case TOOL_HOE:
         if (t == T_GRASS) { G.tile[fy][fx] = T_SOIL; mark(fx, fy); }
+        break;
+    case TOOL_PICK:  /* pedras levam 2 golpes; tambem desfaz terra arada vazia */
+        if (t == T_ROCK) {
+            if (++G.crop[fy][fx] >= 2) {
+                G.tile[fy][fx] = T_GRASS; G.crop[fy][fx] = 0; G.stone += 3;
+                say("+3 pedra", 2.0f);
+            }
+            mark(fx, fy);
+        } else if ((t == T_SOIL || t == T_WET) && G.crop[fy][fx] == 0) {
+            G.tile[fy][fx] = T_GRASS; mark(fx, fy);
+        }
         break;
     case TOOL_CAN:
         if (t == T_WATER) { P->water = WATER_MAX; say("Regador cheio.", 2.0f); }
@@ -207,6 +301,15 @@ void game_update(const pad_t pads[2], float dt) {
             }
         } else P->cool = 0;
 
+        /* animacao de andar: quadros 1,2,3,2 enquanto o direcional/analogico esta ativo */
+        P->moving = (mx || my);
+        if (P->moving) P->anim += dt * 9.0f; else P->anim = 0;
+        {
+            static const int seq[4] = { 1, 2, 3, 2 };
+            int fr = P->moving ? seq[(int)P->anim & 3] : 0;
+            if (fr != P->frame) { P->frame = fr; mark_player(P); }
+        }
+
         if (in->a  && !P->prev.a)  act(i);
         if (in->rb && !P->prev.rb) { P->tool = (P->tool + 1) % TOOL_COUNT; mark_player(P); }
         if (in->lb && !P->prev.lb) { P->tool = (P->tool + TOOL_COUNT - 1) % TOOL_COUNT; mark_player(P); }
@@ -242,6 +345,28 @@ static void draw_crop(int px, int py, int u, int s) {
             R(6, 8, 4, 4, 230, 50, 50); break;
     }
 }
+static void draw_sprite(int px, int py, int who, int dir, int fr) {
+    const char *sp = SPR[who][dir][fr];
+    const unsigned char (*pal)[3] = who ? PAL_GIRL : PAL_BOY;
+    int T = tile_px, HD = T * 3 / 2;             /* altura final = 1,5 tile */
+    int w = SPR_W * HD / SPR_H, ox = px + (T - w) / 2, top = py + T - HD;
+    for (int j = 0; j < SPR_H; j++) {
+        int y0 = top + j * HD / SPR_H, y1 = top + (j + 1) * HD / SPR_H;
+        if (y1 <= y0) y1 = y0 + 1;
+        for (int i = 0; i < SPR_W; ) {
+            char c = sp[j * SPR_W + i];
+            if (c == '.') { i++; continue; }
+            int k = i;
+            while (k < SPR_W && sp[j * SPR_W + k] == c) k++;
+            int idx = c <= '9' ? c - '0' : (c <= 'Z' ? c - 'A' + 10 : c - 'a' + 36);
+            int x0 = ox + i * HD / SPR_H, x1 = ox + k * HD / SPR_H;
+            if (x1 <= x0) x1 = x0 + 1;
+            plat_rect(x0, y0, x1 - x0, y1 - y0, pal[idx][0], pal[idx][1], pal[idx][2]);
+            i = k;
+        }
+    }
+}
+
 static void draw_tile(int x, int y) {
     int u = tile_px / 16, px = org_x + x * tile_px, py = org_y + y * tile_px;
     switch (G.tile[y][x]) {
@@ -251,6 +376,10 @@ static void draw_tile(int x, int y) {
     case T_PATH:  R(0, 0, 16, 16, 200, 180, 130); R(3, 5, 1, 1, 180, 160, 110); R(11, 10, 1, 1, 180, 160, 110); break;
     case T_WATER: R(0, 0, 16, 16, 50, 110, 200); R(3, 5, 5, 1, 110, 170, 240); R(8, 11, 5, 1, 110, 170, 240); break;
     case T_TREE:  draw_grass(px, py, u); R(7, 10, 2, 5, 100, 65, 35); R(3, 2, 10, 9, 30, 110, 40); R(5, 3, 4, 3, 50, 140, 55); break;
+    case T_TREE2: draw_grass(px, py, u); R(7, 9, 2, 6, 120, 80, 40); R(3, 1, 10, 9, 70, 170, 70);
+                  R(5, 2, 5, 3, 110, 200, 100); R(4, 6, 2, 2, 230, 90, 60); R(10, 5, 2, 2, 230, 90, 60); break;
+    case T_ROCK:  draw_grass(px, py, u); R(2, 7, 12, 8, 120, 120, 130); R(4, 5, 8, 4, 150, 150, 160);
+                  R(5, 6, 3, 1, 200, 200, 210); R(3, 13, 10, 2, 90, 90, 100); break;
     case T_HOUSE: draw_grass(px, py, u); R(1, 5, 14, 10, 200, 170, 130); R(0, 2, 16, 4, 170, 50, 40);
                   R(6, 10, 4, 5, 110, 70, 40); R(2, 7, 3, 3, 150, 200, 240); R(11, 7, 3, 3, 150, 200, 240); break;
     case T_SHOP:  draw_grass(px, py, u); R(1, 8, 14, 7, 180, 120, 60);
@@ -258,21 +387,87 @@ static void draw_tile(int x, int y) {
                   R(8, 3, 4, 4, 220, 60, 60); R(12, 3, 4, 4, 240, 240, 240); R(6, 9, 4, 4, 230, 210, 120); break;
     case T_BOX:   draw_grass(px, py, u); R(2, 6, 12, 8, 150, 100, 50); R(2, 6, 12, 2, 120, 80, 40); R(7, 6, 2, 8, 230, 200, 60); break;
     }
-    for (int i = 0; i < 2; i++) {
-        const player_t *P = &G.p[i];
-        if (!P->active) continue;
-        if (P->x == x && P->y == y) {
-            int sr = i ? 240 : 60, sg = i ? 150 : 120, sb = i ? 40 : 230;
-            R(5, 1, 6, 2, 60, 40, 30); R(5, 2, 6, 5, 240, 210, 170);
-            R(4, 7, 8, 6, sr, sg, sb); R(5, 13, 2, 3, 50, 50, 70); R(9, 13, 2, 3, 50, 50, 70);
-        }
-    }
     for (int i = 0; i < 2; i++) {      /* cursor da tile apontada */
         const player_t *P = &G.p[i];
         if (!P->active || P->x + P->dx != x || P->y + P->dy != y) continue;
         int cr = i ? 255 : 255, cg = i ? 170 : 255, cb = i ? 40 : 255;
         R(0, 0, 16, 1, cr, cg, cb); R(0, 15, 16, 1, cr, cg, cb);
         R(0, 0, 1, 16, cr, cg, cb); R(15, 0, 1, 16, cr, cg, cb);
+    }
+}
+
+/* ---- inventario lateral (estilo Stardew Valley) ---- */
+
+static void draw_icon(int px, int py, int u, int id) {
+    switch (id) {
+    case TOOL_AXE:
+        R(7, 4, 2, 11, 140, 90, 50);
+        R(3, 2, 6, 5, 180, 185, 195); R(3, 2, 1, 5, 235, 235, 245); break;
+    case TOOL_HOE:
+        R(7, 3, 2, 12, 140, 90, 50);
+        R(7, 2, 7, 2, 170, 175, 185); R(12, 4, 2, 3, 170, 175, 185); break;
+    case TOOL_PICK:
+        R(7, 5, 2, 10, 140, 90, 50);
+        R(2, 3, 12, 2, 175, 180, 190); R(2, 5, 2, 2, 175, 180, 190); R(12, 5, 2, 2, 175, 180, 190); break;
+    case TOOL_CAN:
+        R(4, 6, 8, 7, 70, 130, 210); R(5, 5, 6, 1, 110, 170, 240);
+        R(11, 4, 3, 3, 70, 130, 210); R(13, 3, 2, 2, 70, 130, 210); R(2, 7, 2, 4, 50, 100, 170); break;
+    case TOOL_SEED:
+        R(4, 5, 8, 9, 220, 200, 140); R(5, 3, 6, 3, 150, 110, 60);
+        R(6, 8, 1, 1, 90, 60, 30); R(9, 10, 1, 1, 90, 60, 30); R(7, 12, 1, 1, 90, 60, 30); break;
+    case TOOL_HARVEST:
+        R(11, 2, 2, 13, 140, 90, 50);
+        R(3, 2, 9, 2, 200, 205, 215); R(2, 4, 2, 3, 200, 205, 215); break;
+    case SLOT_WOOD:
+        R(2, 6, 12, 6, 140, 90, 50); R(11, 7, 3, 4, 205, 165, 115); R(3, 8, 7, 1, 105, 65, 35); break;
+    case SLOT_STONE:
+        R(3, 7, 10, 6, 130, 130, 140); R(5, 5, 6, 3, 155, 155, 165); R(6, 6, 2, 1, 205, 205, 215); break;
+    }
+}
+
+static int slot_count(int id) {
+    switch (id) {
+    case TOOL_CAN:     return G.p[0].water;
+    case TOOL_SEED:    return G.seeds;
+    case TOOL_HARVEST: return G.crops;
+    case SLOT_WOOD:    return G.wood;
+    case SLOT_STONE:   return G.stone;
+    }
+    return -1;   /* ferramenta sem contador */
+}
+
+static void side_signature(int *s) {
+    s[0] = G.p[0].tool; s[1] = G.p[1].tool; s[2] = G.p[1].active;
+    s[3] = G.seeds; s[4] = G.crops; s[5] = G.wood; s[6] = G.stone;
+    s[7] = G.p[0].water; s[8] = 0; s[9] = 0;
+}
+
+static void draw_side(void) {
+    int u = tile_px / 16, gap = tile_px / 8 + 1, sz = tile_px;
+    int sc = tile_px >= 32 ? 2 : 1;
+    for (int i = 0; i < SLOT_COUNT; i++) {
+        int px = side_x, py = org_y + i * (sz + gap);
+        R(0, 0, 16, 16, 45, 40, 55);                       /* fundo do slot */
+        R(0, 0, 16, 1, 90, 80, 100); R(0, 15, 16, 1, 20, 18, 28);
+        draw_icon(px, py, u, i);
+        int sel0 = (i == G.p[0].tool);
+        int sel1 = G.p[1].active && (i == G.p[1].tool);
+        if (sel1) {                                         /* J2: laranja, por dentro */
+            R(1, 1, 14, 1, 255, 160, 40); R(1, 14, 14, 1, 255, 160, 40);
+            R(1, 1, 1, 14, 255, 160, 40); R(14, 1, 1, 14, 255, 160, 40);
+        }
+        if (sel0) {                                         /* J1: branco/azul, por fora */
+            R(0, 0, 16, 2, 240, 240, 255); R(0, 14, 16, 2, 240, 240, 255);
+            R(0, 0, 2, 16, 240, 240, 255); R(14, 0, 2, 16, 240, 240, 255);
+        }
+        int n = slot_count(i);
+        if (n >= 0) {
+            char b[8]; snprintf(b, sizeof b, "%d", n > 999 ? 999 : n);
+            int w = (int)strlen(b) * 6 * sc;
+            int tx = px + sz - w - 2, ty = py + sz - 7 * sc - 2;
+            plat_rect(tx - 2, ty - 1, w + 3, 7 * sc + 2, 20, 18, 28);
+            font_draw(tx, ty, sc, b, 255, 255, 255);
+        }
     }
 }
 
@@ -287,17 +482,49 @@ void game_render(void) {
         int sw = plat_screen_w(), sh = plat_screen_h();
         static const int sizes[3] = { 48, 32, 16 };
         tile_px = 16;
+        /* mapa + barra lateral (1 slot de largura + margem) precisam caber na tela */
         for (int k = 0; k < 3; k++)
-            if (MAP_W * sizes[k] <= sw && MAP_H * sizes[k] + HUD_H <= sh) { tile_px = sizes[k]; break; }
-        org_x = (sw - MAP_W * tile_px) / 2;
+            if (MAP_W * sizes[k] + sizes[k] + 24 <= sw &&
+                SLOT_COUNT * (sizes[k] + sizes[k] / 8 + 1) <= MAP_H * sizes[k] &&
+                MAP_H * sizes[k] + HUD_H <= sh) { tile_px = sizes[k]; break; }
+        int total_w = MAP_W * tile_px + tile_px + 24;
+        org_x = (sw - total_w) / 2;
         org_y = HUD_H;
+        side_x = org_x + MAP_W * tile_px + 16;
         plat_rect(0, 0, sw, sh, 0, 0, 0);
         memset(dirty, 1, sizeof dirty);
+        side_ok = 0;
         layout_ok = 1;
     }
+    unsigned char redrawn[MAP_H][MAP_W];
+    memset(redrawn, 0, sizeof redrawn);
     for (int y = 0; y < MAP_H; y++)
         for (int x = 0; x < MAP_W; x++)
-            if (dirty[y][x]) { draw_tile(x, y); dirty[y][x] = 0; }
+            if (dirty[y][x]) { draw_tile(x, y); redrawn[y][x] = 1; dirty[y][x] = 0; }
+
+    /* personagens por cima, de cima para baixo; redesenha se o tile deles ou o de cima mudou */
+    {
+        int order[2] = { 0, 1 };
+        if (G.p[1].active && G.p[1].y < G.p[0].y) { order[0] = 1; order[1] = 0; }
+        for (int n = 0; n < 2; n++) {
+            const player_t *P = &G.p[order[n]];
+            if (!P->active) continue;
+            int up = P->y > 0 ? redrawn[P->y - 1][P->x] : 0;
+            if (!redrawn[P->y][P->x] && !up) continue;
+            int dir = P->dy > 0 ? 0 : P->dy < 0 ? 1 : P->dx < 0 ? 2 : 3;
+            draw_sprite(org_x + P->x * tile_px, org_y + P->y * tile_px, order[n], dir, P->frame);
+        }
+    }
+
+    {   /* inventario: so redesenha quando algo mudou */
+        int cur[10];
+        side_signature(cur);
+        if (!side_ok || memcmp(cur, last_side, sizeof cur) != 0) {
+            draw_side();
+            memcpy(last_side, cur, sizeof cur);
+            side_ok = 1;
+        }
+    }
 
     char b[96];
     snprintf(b, sizeof b, "Dia %d  Ouro:%d  Sementes:%d  Colheita:%d  Tempo:%d%%",
@@ -441,16 +668,35 @@ void plat_present(void) {
 int plat_screen_w(void) { return scr_w; }
 int plat_screen_h(void) { return scr_h; }
 
+/* Analogico esquerdo: zona morta pequena e so o eixo dominante vale (anda reto, sem diagonal).
+ * Se cima/baixo do analogico ficarem invertidos no seu controle, segure LB + RB juntos
+ * por um instante para inverter o eixo vertical (cada controle guarda a sua escolha). */
+#define STICK_DEADZONE 9000
+static int invert_y[2], inv_prev[2];
+
 static void read_pad(int port, pad_t *p) {
     struct controller_data_s c;
     memset(p, 0, sizeof *p);
     memset(&c, 0, sizeof c);
     get_controller_data(&c, port);
-    p->left  = c.left  || c.s1_x < -16000;
-    p->right = c.right || c.s1_x >  16000;
-    p->up    = c.up    || c.s1_y >  16000;
-    p->down  = c.down  || c.s1_y < -16000;
-    p->a = c.a; p->lb = c.lb; p->rb = c.rb; p->start = c.start;
+
+    int both = c.lb && c.rb;
+    if (both && !inv_prev[port]) invert_y[port] = !invert_y[port];
+    inv_prev[port] = both;
+
+    int sx = c.s1_x, sy = invert_y[port] ? -c.s1_y : c.s1_y;
+    int ax = sx < 0 ? -sx : sx, ay = sy < 0 ? -sy : sy;
+    int l = 0, r = 0, u = 0, d = 0;
+    if (ax > STICK_DEADZONE || ay > STICK_DEADZONE) {
+        if (ax >= ay) { l = sx < 0; r = sx > 0; }
+        else          { u = sy > 0; d = sy < 0; }
+    }
+    p->left  = c.left  || l;
+    p->right = c.right || r;
+    p->up    = c.up    || u;
+    p->down  = c.down  || d;
+    p->a = c.a; p->start = c.start;
+    if (!both) { p->lb = c.lb; p->rb = c.rb; }   /* o atalho LB+RB nao troca ferramenta */
 }
 
 int main(void) {
