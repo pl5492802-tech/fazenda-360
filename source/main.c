@@ -12,7 +12,7 @@ typedef struct { int up, down, left, right, a, lb, rb, start; } pad_t;
 
 typedef struct {
     int active, x, y, dx, dy, tool, water, moving, frame;
-    float cool, anim;
+    float cool, anim, swing;
     pad_t prev;
 } player_t;
 
@@ -121,6 +121,7 @@ enum { SLOT_WOOD = TOOL_COUNT, SLOT_STONE, SLOT_COUNT };
 #define STONE_PRICE 5
 
 #define HUD_H 48
+#define SWING_T 0.32f   /* duracao do golpe da ferramenta (s) */
 #define WATER_MAX 15
 #define SEED_PACK 5
 #define SEED_PRICE 10
@@ -236,6 +237,8 @@ static void act(int i) {
         } else say("Nada para vender.", 2.0f);
         return;
     }
+    if (P->tool == TOOL_AXE || P->tool == TOOL_HOE || P->tool == TOOL_PICK || P->tool == TOOL_HARVEST)
+        P->swing = SWING_T;
     switch (P->tool) {
     case TOOL_AXE:   /* arvores com 't' levam 3 golpes */
         if (t == T_TREE2) {
@@ -313,6 +316,11 @@ void game_update(const pad_t pads[2], float dt) {
         if (in->a  && !P->prev.a)  act(i);
         if (in->rb && !P->prev.rb) { P->tool = (P->tool + 1) % TOOL_COUNT; mark_player(P); }
         if (in->lb && !P->prev.lb) { P->tool = (P->tool + TOOL_COUNT - 1) % TOOL_COUNT; mark_player(P); }
+        if (P->swing > 0) {
+            P->swing -= dt; if (P->swing < 0) P->swing = 0;
+            for (int yy = P->y - 1; yy <= P->y + 1; yy++)
+                for (int xx = P->x - 1; xx <= P->x + 1; xx++) mark(xx, yy);
+        }
         P->prev = *in;
     }
     G.daytime += dt;
@@ -398,17 +406,113 @@ static void draw_tile(int x, int y) {
 
 /* ---- inventario lateral (estilo Stardew Valley) ---- */
 
+/* ===== icones das ferramentas (extraidos da imagem de ferramentas, 24x24) ===== */
+#define ICO_N 24
+static const unsigned char PAL_PICK[14][3] = { {180,179,182}, {163,149,135}, {165,117,74}, {110,106,116}, {167,84,11}, {139,72,23}, {85,82,96}, {67,65,80}, {90,42,16}, {61,34,18}, {47,41,45}, {46,23,11}, {31,28,38}, {18,15,19} };
+static const char *ICO_PICK[ICO_N] = {
+    "........................",
+    "........................",
+    "......cccaaca...........",
+    "....a7100116accaddd.....",
+    "....c6000000136c858d....",
+    ".....77763310067758d....",
+    "......cca776333367b.....",
+    ".........aacc73257c.....",
+    "...........bca4263677...",
+    "..........d854973017c...",
+    ".........d8545ba6106c...",
+    "........98445b9a73017c..",
+    ".......994449d.da6013c..",
+    "......bb4448d..dc7113c..",
+    ".....b8445b9.....c301c..",
+    "....b9444bb......d301c..",
+    "...b94448d.......d601c..",
+    "...b5458b.........a33c..",
+    ".bb5448bb.........c77d..",
+    "d94458b............ac...",
+    "d9548b..................",
+    "db88b9..................",
+    ".ddd....................",
+    "........................"
+};
+static const unsigned char PAL_AXE[14][3] = { {187,183,184}, {176,121,60}, {174,95,21}, {91,88,99}, {147,69,12}, {85,82,95}, {81,79,92}, {68,67,82}, {115,48,12}, {75,33,11}, {56,40,35}, {36,33,38}, {34,25,25}, {26,15,16} };
+static const char *ICO_AXE[ICO_N] = {
+    "........................",
+    "...............bbb......",
+    ".............cbb78d.....",
+    ".............c7631d.....",
+    "............d76553bd....",
+    "...........b76665677d...",
+    "...........b755566637bb.",
+    "...........cb7655533303a",
+    "...........aca765333303b",
+    "..........a988c75333003b",
+    ".........d9428db7350006.",
+    "........d8424cab730006..",
+    "........c2229d.c7000b...",
+    ".......d4229c..c600c....",
+    ".....c94249a....aba.....",
+    "....a942299.............",
+    "...a942289..............",
+    "...d8228c...............",
+    ".cd8248d................",
+    "d94249d.................",
+    "d94489..................",
+    "c9889c..................",
+    "2.dd....................",
+    "........................"
+};
+static const unsigned char PAL_HOE[14][3] = { {184,153,120}, {179,111,41}, {145,92,46}, {95,93,104}, {142,70,14}, {82,80,94}, {72,69,81}, {96,42,11}, {66,40,25}, {54,39,33}, {41,37,41}, {31,26,26}, {26,18,19}, {18,10,7} };
+static const char *ICO_HOE[ICO_N] = {
+    "........................",
+    "..............bcca......",
+    "............9aa668b.....",
+    "............ba6556b.....",
+    "...........b666533a9....",
+    "..........db6655556ab...",
+    "..........dca6555555a6..",
+    "............c665555336a.",
+    "...........8b8665533303c",
+    "..........d844895333003b",
+    ".........b8414cb6333003c",
+    "........97414b7ba530036.",
+    "........71148..aa30056..",
+    ".......c41478...9666a...",
+    ".....984147d.....9a8....",
+    "....b841478.............",
+    "....841188..............",
+    "...d4117d...............",
+    "..c7114d................",
+    "d84147d.................",
+    "d8117c8.................",
+    "d877cc..................",
+    ".8dd8...................",
+    "........................"
+};
+
+static void draw_icon_map(int px, int py, int sz, const char *const *map, const unsigned char (*pal)[3]) {
+    for (int j = 0; j < ICO_N; j++) {
+        int y0 = py + j * sz / ICO_N, y1 = py + (j + 1) * sz / ICO_N;
+        if (y1 <= y0) y1 = y0 + 1;
+        for (int i = 0; i < ICO_N; ) {
+            char c = map[j][i];
+            if (c == '.') { i++; continue; }
+            int k = i;
+            while (k < ICO_N && map[j][k] == c) k++;
+            int idx = c <= '9' ? c - '0' : c - 'a' + 10;
+            int x0 = px + i * sz / ICO_N, x1 = px + k * sz / ICO_N;
+            if (x1 <= x0) x1 = x0 + 1;
+            plat_rect(x0, y0, x1 - x0, y1 - y0, pal[idx][0], pal[idx][1], pal[idx][2]);
+            i = k;
+        }
+    }
+}
+
 static void draw_icon(int px, int py, int u, int id) {
     switch (id) {
-    case TOOL_AXE:
-        R(7, 4, 2, 11, 140, 90, 50);
-        R(3, 2, 6, 5, 180, 185, 195); R(3, 2, 1, 5, 235, 235, 245); break;
-    case TOOL_HOE:
-        R(7, 3, 2, 12, 140, 90, 50);
-        R(7, 2, 7, 2, 170, 175, 185); R(12, 4, 2, 3, 170, 175, 185); break;
-    case TOOL_PICK:
-        R(7, 5, 2, 10, 140, 90, 50);
-        R(2, 3, 12, 2, 175, 180, 190); R(2, 5, 2, 2, 175, 180, 190); R(12, 5, 2, 2, 175, 180, 190); break;
+    case TOOL_AXE:  draw_icon_map(px + u, py + u, 14 * u, ICO_AXE,  PAL_AXE);  break;
+    case TOOL_HOE:  draw_icon_map(px + u, py + u, 14 * u, ICO_HOE,  PAL_HOE);  break;
+    case TOOL_PICK: draw_icon_map(px + u, py + u, 14 * u, ICO_PICK, PAL_PICK); break;
     case TOOL_CAN:
         R(4, 6, 8, 7, 70, 130, 210); R(5, 5, 6, 1, 110, 170, 240);
         R(11, 4, 3, 3, 70, 130, 210); R(13, 3, 2, 2, 70, 130, 210); R(2, 7, 2, 4, 50, 100, 170); break;
@@ -471,6 +575,71 @@ static void draw_side(void) {
     }
 }
 
+/* ---- ferramenta na mao e animacao de golpe (estilo da folha de ferramentas) ---- */
+static void tool_line(int x0, int y0, int x1, int y1, int th, int tool) {
+    for (int i = 0; i <= 10; i++) {
+        int x = x0 + (x1 - x0) * i / 10, y = y0 + (y1 - y0) * i / 10;
+        plat_rect(x - th / 2, y - th / 2, th, th, 140, 90, 50);
+    }
+    int hs = th * 3;
+    switch (tool) {
+    case TOOL_AXE:
+        plat_rect(x1 - hs, y1 - hs, hs * 2, hs * 2 - th, 175, 180, 192);
+        plat_rect(x1 + hs - th, y1 - hs, th, hs * 2 - th, 235, 235, 245); break;
+    case TOOL_PICK:
+        plat_rect(x1 - hs * 2, y1 - th, hs * 4, th * 2, 175, 180, 190);
+        plat_rect(x1 - hs * 2, y1, th * 2, hs, 175, 180, 190);
+        plat_rect(x1 + hs * 2 - th * 2, y1, th * 2, hs, 175, 180, 190); break;
+    case TOOL_HOE:
+        plat_rect(x1 - th, y1 - th, hs * 2, th * 2, 170, 175, 185);
+        plat_rect(x1 + hs - th, y1, th * 2, hs, 170, 175, 185); break;
+    default:   /* foice */
+        plat_rect(x1 - hs * 2, y1 - th, hs * 3, th, 205, 210, 220);
+        plat_rect(x1 - hs * 2, y1, th, hs, 205, 210, 220); break;
+    }
+}
+
+static int has_hand_tool(int tool) {
+    return tool == TOOL_AXE || tool == TOOL_HOE || tool == TOOL_PICK || tool == TOOL_HARVEST;
+}
+
+static void draw_held(int who) {          /* ferramenta parada/andando, na mao */
+    const player_t *P = &G.p[who];
+    if (!has_hand_tool(P->tool) || P->swing > 0) return;
+    int T = tile_px, th = T / 16 > 0 ? T / 16 : 1;
+    int px = org_x + P->x * T, py = org_y + P->y * T;
+    int hx = px + T / 2 + (P->dx ? P->dx * T / 5 : T / 5), hy = py + T * 45 / 100;
+    tool_line(hx, hy, hx + (P->dx ? P->dx * T / 6 : T / 8), hy + T / 3, th, P->tool);
+}
+
+static void draw_swing(int who) {         /* golpe: levanta, desce e risca o arco */
+    const player_t *P = &G.p[who];
+    if (P->swing <= 0 || !has_hand_tool(P->tool)) return;
+    int T = tile_px, th = T / 16 > 0 ? T / 16 : 1;
+    int px = org_x + P->x * T, py = org_y + P->y * T;
+    float p = 1.0f - P->swing / SWING_T;
+    int hx = px + T / 2, hy = py + T * 45 / 100;
+    int k0x = hx - P->dx * T / 5, k0y = py - T * 45 / 100;          /* levantada */
+    int k1x = hx + P->dx * T / 3, k1y = py - T / 3;                 /* topo do arco */
+    int k2x = px + T / 2 + P->dx * T * 9 / 10, k2y = py + T / 2 + P->dy * T * 9 / 10 + (P->dy ? 0 : T / 6);
+    int ex, ey;
+    if (p < 0.35f) { float t = p / 0.35f; ex = k0x + (int)((k1x - k0x) * t); ey = k0y + (int)((k1y - k0y) * t); }
+    else           { float t = (p - 0.35f) / 0.65f; t = t * t;
+                     ex = k1x + (int)((k2x - k1x) * t); ey = k1y + (int)((k2y - k1y) * t); }
+    if (p >= 0.35f) {                       /* rastro claro do golpe */
+        int vx = k2x - k1x, vy = k2y - k1y;
+        int len = (vx < 0 ? -vx : vx) + (vy < 0 ? -vy : vy) + 1;
+        float reach = (p - 0.35f) / 0.65f;
+        for (int a = 0; a <= 6; a++) {
+            float f = a / 6.0f * reach; if (f > 1) f = 1;
+            int off = (int)(T / 5 * (f * (1.0f - f) * 4.0f));
+            int x = k1x + (int)(vx * f) - vy * off / len, y = k1y + (int)(vy * f) + vx * off / len;
+            plat_rect(x - th, y - th, th * 2, th * 2, 230, 235, 245);
+        }
+    }
+    tool_line(hx, hy, ex, ey, th, P->tool);
+}
+
 static void hud_line(int row, const char *s) {
     if (strncmp(last_hud[row], s, sizeof last_hud[row]) == 0) return;
     snprintf(last_hud[row], sizeof last_hud[row], "%s", s);
@@ -513,7 +682,9 @@ void game_render(void) {
             if (!redrawn[P->y][P->x] && !up) continue;
             int dir = P->dy > 0 ? 0 : P->dy < 0 ? 1 : P->dx < 0 ? 2 : 3;
             draw_sprite(org_x + P->x * tile_px, org_y + P->y * tile_px, order[n], dir, P->frame);
+            draw_held(order[n]);
         }
+        for (int n = 0; n < 2; n++) if (G.p[n].active) draw_swing(n);
     }
 
     {   /* inventario: so redesenha quando algo mudou */
@@ -660,8 +831,8 @@ void plat_present(void) {
     if (!need_flush) return;
     /* console_putch termina com memdcbst() no framebuffer inteiro (unico flush exportado).
      * Imprime um espaco na celula (0,0) e volta o cursor com '\r' para nunca rolar a tela. */
-    console_putch(' ');
-    console_putch('\r');
+    console_set_cursor(0, 0);
+    console_putch(' ');           /* um unico flush por quadro */
     need_flush = 0;
 }
 
@@ -674,11 +845,11 @@ int plat_screen_h(void) { return scr_h; }
 #define STICK_DEADZONE 9000
 static int invert_y[2], inv_prev[2];
 
-static void read_pad(int port, pad_t *p) {
+static int read_pad(int port, pad_t *p) {
     struct controller_data_s c;
     memset(p, 0, sizeof *p);
     memset(&c, 0, sizeof c);
-    get_controller_data(&c, port);
+    int fresh = get_controller_data(&c, port);
 
     int both = c.lb && c.rb;
     if (both && !inv_prev[port]) invert_y[port] = !invert_y[port];
@@ -697,6 +868,7 @@ static void read_pad(int port, pad_t *p) {
     p->down  = c.down  || d;
     p->a = c.a; p->start = c.start;
     if (!both) { p->lb = c.lb; p->rb = c.rb; }   /* o atalho LB+RB nao troca ferramenta */
+    return fresh;
 }
 
 int main(void) {
@@ -707,16 +879,20 @@ int main(void) {
     console_get_dimensions(&cols, &rows);
     scr_w = (int)cols * 8;
     scr_h = (int)rows * 16;
-    xenon_make_it_faster(XENON_SPEED_FULL);
     usb_init();
     usb_do_poll();
 
     game_init();
-    unsigned long long last = mftb();
+    unsigned long long last = mftb(), stat_t = last;
+    int frames = 0, pad_seen = 0;
+    double worst_poll = 0;
     for (;;) {
+        unsigned long long p0 = mftb();
         usb_do_poll();
+        double poll_ms = (double)(mftb() - p0) * 1000.0 / (double)PPC_TIMEBASE_FREQ;
+        if (poll_ms > worst_poll) worst_poll = poll_ms;
         pad_t pads[2];
-        read_pad(0, &pads[0]);
+        if (read_pad(0, &pads[0])) pad_seen = 1;
         read_pad(1, &pads[1]);
         unsigned long long now = mftb();
         float dt = (float)((double)(now - last) / (double)PPC_TIMEBASE_FREQ);
@@ -724,7 +900,17 @@ int main(void) {
         if (dt > 0.25f) dt = 0.25f;
         game_update(pads, dt);
         game_render();
-        mdelay(8);
+        frames++;
+        if (now - stat_t >= (unsigned long long)PPC_TIMEBASE_FREQ) {   /* diagnostico, 1x por segundo */
+            char b[64];
+            snprintf(b, sizeof b, "FPS:%d USB MAX:%dMS PAD:%s", frames, (int)worst_poll,
+                     pad_seen ? "OK" : "SEM DADOS");
+            plat_rect(HUD_X, scr_h - 18, scr_w - HUD_X, 16, 0, 0, 0);
+            font_draw(HUD_X, scr_h - 18, 2, b, 200, 200, 200);
+            plat_present();
+            frames = 0; worst_poll = 0; stat_t = now;
+        }
+        mdelay(2);
     }
     return 0;
 }
